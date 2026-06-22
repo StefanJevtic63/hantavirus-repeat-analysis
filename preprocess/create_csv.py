@@ -183,7 +183,7 @@ def build_dataset(file_prefix_filter: str, species_map: dict[str, str]) -> DataF
                     feature_matrices.append(aggregated_features)
 
         if not feature_matrices:
-            print(f"[-] No feature matrices found for prefix: {file_prefix_filter}")
+            print(f"WARNING: No feature matrices found for prefix: {file_prefix_filter}")
             return DataFrame()
 
         # Combines all feature matrices into a single DataFrame, ensuring alignment on Sequence_ID
@@ -227,9 +227,9 @@ def main() -> None:
     complete_sequences_dataset: DataFrame = build_dataset(file_prefix_filter=COMPLETE_PREFIX_FILTER, species_map=species_map)
     if not complete_sequences_dataset.empty:
         complete_sequences_dataset.to_csv(path.join(OUTPUT_DIR, COMPLETE_SEQUENCES_CSV_FILE_NAME), index=False)
-        print("Dataset 2 successfully saved.\n")
+        print("Dataset 2 successfully saved.")
     else:
-        print("Warning: Dataset 2 is empty. No CSV file was generated.\n")
+        print("Warning: Dataset 2 is empty. No CSV file was generated.")
 
 
 if __name__ == "__main__":

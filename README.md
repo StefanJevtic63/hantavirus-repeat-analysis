@@ -1,134 +1,379 @@
-# Hantavirus Genomic Repeat Analysis 
+# Hantavirus Genomic Repeat Analysis
 
-This repository contains a modular Python and Jupyter Notebook pipeline designed to extract, preprocess, and cluster genomic repeat sequences 
-from Hantavirus nucleotide sequences. The objective is to achieve optimal clustering performance across multiple Hantavirus species 
-(*Hantaan*, *Dobrava-Belgrade*, *Puumala*, and *Sin Nombre*) using the defined metrics.
+This repository contains a modular Python and Jupyter Notebook pipeline for extracting, preprocessing, and clustering repetitive sequences from Hantavirus genomic data.
+
+The study focuses on four Hantavirus species:
+
+* *Orthohantavirus hantanense* (Hantaan virus)
+* *Orthohantavirus dobravaense* (Dobrava-Belgrade virus)
+* *Orthohantavirus puumalaense* (Puumala virus)
+* *Orthohantavirus sinnombreense* (Sin Nombre virus)
+
+The main objective is to investigate whether genomic repetitive-sequence patterns can be used to identify structural similarities and naturally occurring groups among Hantavirus nucleotide sequences.
+
+---
+
+## Overview
+
+The analysis is organized as a reproducible and modular pipeline consisting of:
+
+- FASTA sequence preprocessing
+-  Repetitive-sequence extraction using **StatRepeats**
+- Construction of binary repeat-presence matrices
+- Repeat-length filtering
+- **TF-IDF** transformation
+- Dimensionality reduction using **PCA**
+- Hyperparameter optimization using **Grid Search**
+- Unsupervised clustering
+- Evaluation using clustering quality metrics
+- Analysis of the most characteristic repetitive sequences
+
+The complete workflow is designed to operate on highly dimensional and sparse genomic repeat representations.
 
 ---
 
 ## Features & Workflow
 
-The analysis is executed through a reproducible engineering pipeline structured into three core phases:
+### Sequence preprocessing
 
-1. **Feature Extraction (`StatRepeats`)**
-   * Processes raw FASTA files from the NCBI Virus database.
-   * Enforces strict nucleotide alphabet filtering (`A, C, G, T, U`).
-   * Extracts four distinct structural types of repetitive elements using the `StatRepeats` tool:
-     * Direct Non-Complementary (`dn`)
-     * Direct Complementary (`dc`)
-     * Inverse Non-Complementary (`in`)
-     * Inverse Complementary (`ic`)
-   * Calculates structural metrics per sequence: total counts, average lengths, maximum lengths, and length frequency distributions.
+Raw genomic sequences are provided in FASTA format.
 
-2. **Preprocessing**
-   * **Feature Elimination:** Drops highly correlated attributes using Pearson's Correlation Coefficient ($>0.90$ for the general dataset; $>0.75$ for the complete genome dataset) to reduce multi-collinearity.
-   * **Feature Scaling:** Standardizes features using `StandardScaler` ($\mu=0$, $\sigma=1$).
-   * **Class Balancing:** Addresses severe public database imbalance across species by applying **SMOTE** (Synthetic Minority Over-sampling Technique) to create uniform distributions.
-   * **Dimensionality Reduction:** Compares original feature spaces against reduced representations using Principal Component Analysis (**PCA**).
+The preprocessing stage:
 
-3. **Unsupervised Clustering Models**
-   * Evaluates 5 computational paradigms using Grid Search over their respective hyperparameter spaces:
-     * **K-Means:** Partitioning around centroids (`k-means++` initialization).
-     * **DBSCAN:** Density-based spatial clustering capable of isolating stochastic noise.
-     * **Agglomerative Clustering:** Hierarchical bottom-up topological reconstruction (using Ward and Average linkage).
-     * **Spectral Clustering:** Non-linear deconstruction using affinity matrix eigenvalues.
-     * **Gaussian Mixture Models (GMM):** Probabilistic expectation-maximization soft-clustering.
-   * **Evaluation Metrics:** Quality is quantitatively validated using *Silhouette Coefficient*, *Davies-Bouldin Index*, and *Calinski-Harabasz Index*.
-   * **Visual Validation:** Employs **t-SNE** (t-Distributed Stochastic Neighbor Embedding) to map high-dimensional partitions into a 2D space for topological verification.
+* validates the nucleotide alphabet;
+* retains only `A`, `C`, `G`, `T`, and `U`;
+* removes invalid symbols and structural inconsistencies;
+* generates consistent `Sequence_ID` to virus-species mappings.
 
-The StatRepeats tool can be found [here](http://bioinfo.matf.bg.ac.rs/home/downloads.wafl?cat=Software&project=statrepeats).
+The resulting cleaned FASTA files are subsequently processed by StatRepeats.
+
+### Repetitive-sequence extraction
+
+The main feature-extraction component is **StatRepeats**, a specialized tool for identifying statistically significant maximal repetitive sequences.
+
+Four structural repeat types are analyzed:
+
+* **Direct Non-Complementary (`dn`)**
+* **Direct Complementary (`dc`)**
+* **Inverse Non-Complementary (`in`)**
+* **Inverse Complementary (`ic`)**
+
+StatRepeats outputs are subsequently transformed into a unified representation of repetitive sequences.
+
+The StatRepeats tool is available at:
+
+http://bioinfo.matf.bg.ac.rs/home/downloads.wafl?cat=Software&project=statrepeats
+
+### Binary repeat matrix construction
+
+For every genomic sequence, the pipeline determines which repetitive sequences are present.
+
+A binary matrix is constructed where:
+
+* each row represents one genome;
+* each column represents one unique repetitive sequence;
+* `1` indicates that the repeat is present;
+* `0` indicates that the repeat is absent.
+
+The resulting matrices are extremely high-dimensional and sparse.
+
+### Repeat-length filtering
+
+Repeat-length distributions are analyzed before clustering.
+
+For `all_sequences`, the selected repeat lengths are:
+
+```text
+12, 14, 16, 18, 20
+```
+
+For `complete_sequences`, the selected repeat lengths are:
+
+```text
+10, 12, 14, 16, 18, 20
+```
+
+In both datasets, repeats of length 16 are the most frequent.
+
+### TF-IDF transformation
+
+Because the binary repeat matrices are highly sparse, **TF-IDF** is applied before clustering.
+
+TF-IDF reduces the influence of repetitive sequences that occur in most genomes while increasing the relative importance of less frequent and potentially more discriminative repeats.
+
+The transformed representation remains sparse throughout the preprocessing pipeline.
+
+### PCA dimensionality reduction
+
+Principal Component Analysis (**PCA**) is used to further reduce the dimensionality of the transformed feature space.
+
+The following cumulative explained-variance levels are evaluated:
+
+```text
+5%, 10%, 15%, 20%, 40%, 60%
+```
+
+The number of retained components is selected according to the minimum number required to reach each target variance level.
 
 ---
 
-## Datasets Overview
+## Datasets
 
-The pipeline executes experiments across two distinct target matrices generated by compiling the structural outputs of `StatRepeats`:
+Two final datasets are used in the experiments.
 
-| Dataset Name | Description | Samples | Initial Features | Reduced Space (PCA) |
-| :--- | :--- | :--- | :--- | :--- |
-| **`dataset_all_sequences.csv`** | Includes partial, fragmented, and full genomic records. | 6,658 | 77 | Dynamic ($\ge 95\%$ variance) |
-| **`dataset_complete_sequences.csv`** | Contains exclusively fully verified, continuous genomes. | 417 | 71 | Fixed to 4 components |
+| Dataset                  | Description                                         | Samples | Repeat Features |
+| :----------------------- | :-------------------------------------------------- | ------: | --------------: |
+| **`all_sequences`**      | Partial, fragmented, and complete genomic sequences |   7,087 |          47,135 |
+| **`complete_sequences`** | Fully sequenced and verified complete genomes       |     435 |          62,364 |
+
+The `all_sequences` dataset provides a larger and more diverse sample set, while `complete_sequences` contains fewer samples but a larger number of unique repeat features. Both datasets are processed as sparse representations.
+
+### Dataset files
+
+| File                        | Role                                         |
+| :-------------------------- | :------------------------------------------- |
+| `all_sequences.fasta`       | Raw genomic sequences                        |
+| `all_sequences_clean.fasta` | Validated FASTA sequences                    |
+| `all_dn.txt`                | StatRepeats direct non-complementary output  |
+| `all_dc.txt`                | StatRepeats direct complementary output      |
+| `all_in.txt`                | StatRepeats inverse non-complementary output |
+| `all_ic.txt`                | StatRepeats inverse complementary output     |
+| `all_sequences.csv`         | Binary repeat matrix for all sequences       |
+| `complete_sequences.csv`    | Binary repeat matrix for complete sequences  |
+
+---
+
+## Clustering Models
+
+Five unsupervised clustering algorithms are evaluated:
+
+### K-Means
+
+Partitions the data into a predefined number of clusters by minimizing within-cluster squared distances to centroids.
+
+Parameters investigated:
+
+```text
+n_clusters = {2, 3, 4, 6, 8}
+init       = k-means++
+n_init     = 10
+max_iter   = 300
+```
+
+### Agglomerative Clustering
+
+A hierarchical bottom-up method that initially treats every observation as a separate cluster and progressively merges the closest clusters.
+
+Parameters investigated:
+
+```text
+n_clusters = {2, 3, 4, 6, 8}
+linkage    = {ward, average, complete}
+metric     = {euclidean, cosine}
+```
+
+### BIRCH
+
+A hierarchical clustering method based on a tree of summarized statistics, designed to efficiently process large datasets.
+
+Parameters investigated:
+
+```text
+number_clusters = {2, 3, 4, 6, 8}
+diameter        = {0.1, 0.3, 0.5}
+```
+
+### DBSCAN
+
+A density-based clustering algorithm capable of identifying clusters of arbitrary shape and treating low-density observations as noise.
+
+The `eps` parameter is estimated from the distribution of distances to the k-nearest neighbors.
+
+```text
+neighbors = {3, 5, 10}
+```
+
+### CLIQUE
+
+A grid-based clustering method designed for high-dimensional datasets. It identifies dense regions in subspaces and combines neighboring dense regions.
+
+Parameters investigated:
+
+```text
+amount_intervals    = {3, 4}
+density_threshold   = {1, 2}
+```
+
+The hyperparameter spaces are systematically evaluated using Grid Search.
+
+---
+
+## Evaluation Metrics
+
+The primary optimization criterion is the **Silhouette Coefficient**.
+
+The following metrics are calculated for each clustering configuration:
+
+### Silhouette Coefficient
+
+Measures both intra-cluster compactness and inter-cluster separation.
+
+Higher values indicate better-defined clusters.
+
+### Davies-Bouldin Index
+
+Measures the relationship between within-cluster dispersion and between-cluster separation.
+
+Lower values indicate better clustering.
+
+### Calinski-Harabasz Index
+
+Measures the ratio between between-cluster dispersion and within-cluster dispersion.
+
+Higher values indicate better-separated clusters.
+
+Silhouette is used to select the optimal hyperparameter configuration, while Davies-Bouldin and Calinski-Harabasz provide additional evaluation of the selected solutions.
 
 ---
 
 ## Experimental Results
 
-The pipeline evaluates 5 clustering algorithms across 4 distinct experimental phases (with and without PCA dimensionality reduction). 
-Performance is measured using the Silhouette Coefficient, Davies-Bouldin Index, and Calinski-Harabasz Index.
+The best configurations obtained during the experiments are summarized below.
 
-### 1. Phase 1: `all_sequences` without PCA
-The feature space consists of 58 columns after filtering highly correlated variables. DBSCAN achieves a strong structural partitioning, while Agglomerative Clustering shows high homogeneity.
+| Model         | Dataset              | Repeat Filtering | PCA Variance | Components | Silhouette |
+| :------------ | :------------------- | :--------------: | -----------: | ---------: | ---------: |
+| K-Means       | `all_sequences`      |        Yes       |           5% |          3 | **0.7829** |
+| Agglomerative | `all_sequences`      |        Yes       |           5% |          3 | **0.7950** |
+| **BIRCH**     | **`all_sequences`**  |      **Yes**     |       **5%** |      **3** | **0.7974** |
+| DBSCAN        | `complete_sequences` |        No        |          40% |         19 | **0.6077** |
+| CLIQUE        | `all_sequences`      |        Yes       |          10% |          5 | **0.7004** |
 
-| Algorithm | Silhouette | Davies-Bouldin | Calinski-Harabasz |
-| :--- | :---: | :---: | :---: |
-| K-Means | 0.4629 | 1.1132 | 2,310.8408 |
-| DBSCAN | 0.6387 | 0.2669 | 22,152.1938 |
-| **Agglomerative** | **0.9116** | **0.0960** | **816.9720** |
-| Spectral | 0.6235 | 2.3153 | 61.8328 |
-| Gaussian Mixture | 0.4603 | 1.0347 | 2,266.3506 |
+### Best K-Means configuration
+
+```text
+Dataset:       all_sequences
+Repeat filter: enabled
+PCA variance:  5%
+Components:    3
+n_clusters:    2
+init:          k-means++
+n_init:        10
+max_iter:      300
+Silhouette:    0.7829
+```
+
+### Best Agglomerative configuration
+
+```text
+Dataset:       all_sequences
+Repeat filter: enabled
+PCA variance:  5%
+Components:    3
+n_clusters:    3
+linkage:       average
+metric:        euclidean
+Silhouette:    0.7950
+```
+
+### Best BIRCH configuration
+
+```text
+Dataset:       all_sequences
+Repeat filter: enabled
+PCA variance:  5%
+Components:    3
+number_clusters: 3
+diameter:        0.3
+Silhouette:      0.7974
+```
+
+### Best DBSCAN configuration
+
+```text
+Dataset:       complete_sequences
+Repeat filter: disabled
+PCA variance:  40%
+Components:    19
+eps:           0.0050278427
+neighbors:     3
+Silhouette:    0.6077
+```
+
+### Best CLIQUE configuration
+
+```text
+Dataset:       all_sequences
+Repeat filter: enabled
+PCA variance:  10%
+Components:    5
+amount_intervals:  4
+density_threshold: 1
+Silhouette:       0.7004
+```
 
 ---
 
-### 2. Phase 2: `all_sequences` with PCA (Optimal Configuration)
-Applying PCA to retain 95% of cumulative variance significantly enhances the performance of density-based and hierarchical approaches. 
+## Analysis of Characteristic Repeats
 
-| Algorithm | Silhouette | Davies-Bouldin | Calinski-Harabasz |
-| :--- | :---: | :---: | :---: |
-| K-Means | 0.4843 | 1.0692 | 2,466.6425 |
-| DBSCAN | 0.9060 | 0.1409 | 1,722,112.2695 |
-| **Agglomerative** | **0.9131** | **0.2281** | **832.9889** |
-| Spectral | 0.8053 | 2.0530 | 148.0341 |
-| Gaussian Mixture | 0.4691 | 1.7821 | 1,973.3690 |
+The most significant repetitive sequences are identified by comparing their local representation within a cluster with their global representation across the dataset.
 
-> **Analysis of Phase 2:** Although DBSCAN achieves a high Silhouette score ($0.9060$), its extreme and distorted Calinski-Harabasz index is a mathematical byproduct of over-filtering.
-DBSCAN aggressively classifies irregular peripheral sequences as stochastic noise, artificially boosting the density of the remaining core clusters.
-**Agglomerative Clustering is selected as the optimal model ($0.9131$)** because it successfully groups the entire genomic space uniformly without discarding biological data.
+Several repetitive sequences consistently appear among the most characteristic features identified by K-Means, Agglomerative, and BIRCH, including:
 
----
+```text
+AAAGAAAAGAAA
+AAGAAAAAAGAA
+AGAAGAAGAAGA
+AAGGAAAAGGAA
+TATTATTATTAT
+AAAAAAAAAAAA
+GAAAAGGAAAAG
+AGAAAAAAAAGA
+```
 
-### 3. Phase 3: `complete_sequences` without PCA
-The dataset is smaller and more sparse (44 features). Due to the *curse of dimensionality* and low density in the unreduced space, distance metrics degrade.
+The agreement between K-Means, Agglomerative, and BIRCH indicates that the identified repeat patterns are relatively stable across different clustering approaches.
 
-| Algorithm | Silhouette | Davies-Bouldin | Calinski-Harabasz |
-| :--- | :---: | :---: | :---: |
-| K-Means | 0.1869 | 1.8576 | 99.9457 |
-| DBSCAN | 0.0000 | 0.0000 | 0.0000 |
-| **Agglomerative** | **0.6339** | **0.2561** | **11.7028** |
-| Spectral | 0.6173 | 1.8105 | 10.5970 |
-| Gaussian Mixture | 0.1199 | 2.6945 | 51.4447 |
-
-> **DBSCAN Zero-Performance Note:** The evaluation function drops to explicitly $0.0000$ across all metrics for DBSCAN.
-This occurs because the algorithm filters out every single instance as stochastic noise due to spatial sparsity.
-Since less than two valid clusters are formed, the metric evaluation short-circuits to zero as calculating cluster separation becomes mathematically invalid.
+Agglomerative and BIRCH generally produce larger differences between local and global repeat representation than K-Means, suggesting stronger cluster-specific repeat patterns.
 
 ---
 
-### 4. Phase 4: `complete_sequences` with PCA
-Restricting the complete sequence dataset to exactly 4 principal components successfully counters the curse of dimensionality, making spatial metrics meaningful again.
+## Conclusions
 
-| Algorithm | Silhouette | Davies-Bouldin | Calinski-Harabasz |
-| :--- | :---: | :---: | :---: |
-| K-Means | 0.4851 | 0.8588 | 635.3472 |
-| **DBSCAN** | **0.7517** | **0.2260** | **800.3796** |
-| Agglomerative | 0.4814 | 0.6240 | 240.6563 |
-| Spectral | 0.4470 | 0.4750 | 159.5978 |
-| Gaussian Mixture | 0.4554 | 0.9250 | 583.1096 |
+The experiments demonstrate that repetitive genomic sequences can provide useful structural information for unsupervised analysis of Hantavirus genomes.
+
+The main conclusions are:
+
+1. **BIRCH achieved the best overall Silhouette coefficient**, reaching **0.7974** on the `all_sequences` dataset.
+2. **Agglomerative Clustering** achieved a very similar result of **0.7950**, followed by **K-Means with 0.7829**.
+3. The best-performing configurations predominantly use the `all_sequences` dataset with repeat-length filtering and strong dimensionality reduction.
+4. **DBSCAN** performed substantially better on `complete_sequences` than on the `all_sequences` configuration, but its best Silhouette score of **0.6077** remained below the best hierarchical and centroid-based approaches.
+5. **CLIQUE** achieved a Silhouette coefficient of **0.7004**.
+6. The similarity of the most significant repeats identified by K-Means, Agglomerative, and BIRCH supports the stability of the detected genomic patterns.
+7. The results demonstrate the importance of preprocessing and dimensionality reduction for clustering highly dimensional sparse repeat representations.
+
+Overall, **BIRCH applied to the filtered `all_sequences` dataset after TF-IDF transformation and PCA reduction to three components represents the best-performing configuration in the presented experiments.**
 
 ---
-
-## Summary of Conclusions
-1. **Dataset Selection:** The `all_sequences` dataset possesses a more favorable spatial distribution and sample density for unsupervised learning than the highly sparse `complete_sequences` dataset.
-2. **Impact of PCA:** Linear dimensionality reduction consistently improves structural clustering by stripping out redundant multi-collinear background features,
-   which is particularly evident in the massive recovery of DBSCAN in Phase 4 compared to Phase 3.
-4. **The Optimal Model:** The **Agglomerative Hierarchical Clustering model trained on `all_sequences` with PCA** represents the most stable,
-   structurally sound, and biologically complete partitioning of the Hantavirus genomic landscape.
 
 ## Prerequisites & Installation
 
-Ensure you have Python 3.10+ installed. Clone this repository and install the required dependencies:
+Python **3.10+** is recommended.
+
+Clone the repository:
 
 ```bash
 git clone https://github.com/StefanJevtic63/hantavirus-repeat-analysis.git
-cd hantavirus-clustering
+cd hantavirus-repeat-analysis
+```
+
+Install the required dependencies:
+
+```bash
 pip install -r requirements.txt
 ```
+
+The main experimental preprocessing is implemented in the Jupyter notebook:
+
+```text
+clustering_sparse.ipynb
+```
+
